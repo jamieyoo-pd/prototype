@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>정비리포트 · 서비스·점검</title>
+<meta name="theme-color" content="#ffffff">
+
+<!-- 카카오톡 등으로 링크 공유할 때 뜨는 카드 정보.
+     og:image 는 반드시 절대경로여야 합니다. 배포 도메인이 정해지면 주석을 풀고 채워주세요. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="정비리포트 · 서비스·점검">
+<meta property="og:description" content="정비 후 제공한 무료 서비스와 점검 항목을 체크하는 화면입니다.">
+<!-- <meta property="og:url" content="https://배포주소/service-check-3.html"> -->
+<!-- <meta property="og:image" content="https://배포주소/og-image.png"> -->
+<meta name="twitter:card" content="summary_large_image">
+
+<!--
+  정비리포트 > 서비스·점검 탭  —  잔량 입력 3안 확정본
+  출처: Figma DKL8HAwmksVm0MiH491gox · 사용성 테스트 섹션 · node 5378-13531
+
+  3안 = 게이지 카드 위에 제목("잔량을 입력해주세요")과 안내 문구가 없고,
+        값이 파란 말풍선으로 슬라이더 핸들을 따라다니는 형태.
+        말풍선 자리를 비우느라 카드 위쪽 여백이 20px → 52px.
+        패널 전체 높이는 1·2안 대비 237px → 164px 로 줄어듭니다.
+
+  CSS 변수는 Mycle Design System 토큰명을 그대로 따랐습니다.
+  상단 뒤로가기 / 임시저장 / 다른 탭은 마크업만 있고 핸들러는 비어 있습니다.
+-->
+
+<style>
+/* ========================================================================
+   1. Design tokens  (Mycle Design System)
+   ======================================================================== */
+:root{
+  /* color */
+  --fg-strong:#1a2128;              /* Theme/Foreground/Neutral/Strong    */
+  --fg-normal:#505c66;              /* Theme/Foreground/Neutral/Normal    */
+  --fg-assistive:#8e98a0;           /* Theme/Foreground/Neutral/Assistive */
+  --fg-muted:#cfd5d9;               /* Theme/Foreground/Neutral/Muted     */
+  --fg-inverse:#ffffff;             /* Theme/Foreground/Neutral/Inverse   */
+  --bg-surface-default:#ffffff;     /* Theme/Background/Surface/Default   */
+  --bg-surface-basement:#f2f4f6;    /* Theme/Background/Surface/Basement  */
+  --bg-neutral-weak:rgba(2,32,71,.05);    /* Theme/Background/Neutral/Weak       */
+  --bg-neutral-muted:rgba(4,40,62,.11);   /* Theme/Background/Neutral/Muted      */
+  --bg-neutral-strong:#505c66;            /* Theme/Background/Neutral/Strong     */
+  --bg-neutral-disabled:#cfd5d9;          /* Theme/Background/Neutral/Disabled   */
+  --bg-informative-strong:#057bff;        /* Theme/Background/Informative/Strong */
+  --bg-brand-strong:#00afff;              /* Theme/Foreground/Brand/Strong       */
+  --bg-danger-strong:#f84848;             /* Theme/Background/Danger/Strong      */
+  --stroke-neutral-normal:rgba(2,32,71,.05);  /* Theme/Stroke/Neutral/Normal */
+  --stroke-neutral-strong:rgba(4,40,62,.11);  /* Theme/Stroke/Neutral/Strong */
+
+  /* dimension */
+  --x1:4px;  --x1-5:6px; --x2:8px;  --x2-5:10px; --x3:12px; --x3-5:14px;
+  --x4:16px; --x5:20px;  --x6:24px; --x8:32px;   --x11:44px;
+  --radius-circle:999px;
+
+  /* shadow */
+  --shadow-light-normal:0 2px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
+
+  /* typography — Pretendard 미탑재 환경 대비 폴백 스택 */
+  --font:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,
+         "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+
+/* ========================================================================
+   2. Base
+   ======================================================================== */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  /* 페이지 자체는 스크롤되지 않는다. 스크롤은 .body 안에서만. */
+  overflow:hidden;
+  overscroll-behavior:none;
+  font-family:var(--font);
+  background:var(--bg-surface-default);
+  color:var(--fg-strong);
+  -webkit-text-size-adjust:100%;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.screen{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  /* 탑네비 · 탭 · 하단 CTA 고정을 위한 뷰포트 높이.
+     dvh 는 모바일 주소창이 접히고 펴져도 실제 보이는 높이를 따라간다. */
+  height:100vh;
+  height:100dvh;
+  max-width:480px;          /* 기준 폭 360px, 큰 화면에서도 과하게 늘어나지 않도록 */
+  margin:0 auto;
+  background:var(--bg-surface-default);
+  overflow:hidden;
+}
+
+/* hidden 속성이 항상 이기도록. (.note 등에 display:flex 가 걸려 있어 필요) */
+[hidden]{display:none!important}
+
+:focus-visible{outline:2px solid var(--bg-brand-strong);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ========================================================================
+   3. Top navigation  (🔵Top Navigation · 56px)
+   ======================================================================== */
+.topnav{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:var(--x1-5) var(--x3-5) var(--x1-5) var(--x1);
+  padding-top:calc(var(--x1-5) + env(safe-area-inset-top));
+  height:calc(56px + env(safe-area-inset-top));
+  background:var(--bg-surface-default);
+}
+.icon-button{
+  width:var(--x11);height:var(--x11);
+  display:grid;place-items:center;
+  padding:0;border:0;border-radius:var(--x2-5);
+  background:transparent;cursor:pointer;
+}
+.icon-button:active{background:var(--bg-neutral-weak)}
+.text-button{
+  padding:var(--x1) var(--x1-5);
+  border:0;border-radius:var(--x2);
+  background:transparent;cursor:pointer;
+  font-family:inherit;font-size:15px;line-height:22.5px;font-weight:500;
+  color:var(--fg-strong);
+}
+.text-button:active{background:var(--bg-neutral-weak)}
+
+/* ========================================================================
+   4. Tab  (🌈Tab · 52px)
+   ======================================================================== */
+.tabs{
+  position:relative;flex:0 0 auto;
+  height:52px;
+  display:flex;align-items:stretch;justify-content:flex-end;
+  padding:0 var(--x2);
+  background:var(--bg-surface-default);
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;
+}
+.tabs::-webkit-scrollbar{display:none}
+.tabs::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;
+  height:1px;background:var(--stroke-neutral-normal);
+}
+.tab{
+  flex:0 0 auto;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:0 var(--x3);
+  border:0;background:transparent;cursor:pointer;font-family:inherit;
+}
+.tab__label{
+  display:flex;align-items:flex-start;gap:2px;
+  padding:var(--x3) 0;
+  font-size:17px;line-height:25.5px;font-weight:600;
+  color:var(--fg-assistive);white-space:nowrap;
+}
+.tab__dot{
+  flex:0 0 auto;width:var(--x1);height:var(--x1);margin-top:var(--x1);
+  border-radius:var(--radius-circle);background:var(--bg-danger-strong);
+}
+.tab__indicator{width:100%;min-width:36px;height:2px;background:transparent}
+.tab[aria-selected="true"] .tab__label{font-weight:700;color:var(--fg-strong)}
+.tab[aria-selected="true"] .tab__indicator{background:var(--fg-strong)}
+
+/* ========================================================================
+   5. Scroll body
+   ======================================================================== */
+.body{
+  flex:1 1 auto;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  background:var(--bg-surface-default);
+}
+.body__inner{
+  /* 하단 CTA(96px)에 가리지 않도록 확보 */
+  padding-bottom:calc(96px + env(safe-area-inset-bottom));
+}
+.section{display:flex;flex-direction:column}
+.section--gap-bottom{padding-bottom:var(--x8)}
+.divider-thick{flex:0 0 auto;height:10px;background:var(--bg-surface-basement)}
+
+/* ========================================================================
+   6. List header  (🔵List Header)
+   ======================================================================== */
+.list-header{
+  display:flex;flex-direction:column;gap:var(--x1);
+  padding:var(--x5) var(--x5) var(--x3);
+  background:var(--bg-surface-default);
+}
+.list-header__title{margin:0;font-size:20px;line-height:28px;font-weight:600;color:var(--fg-strong)}
+.list-header__title--sm{font-size:17px;line-height:25.5px}
+.list-header__desc{margin:0;font-size:14px;line-height:21.5px;font-weight:400;color:var(--fg-normal)}
+
+/* ========================================================================
+   7. Select row  (🔵Left Select Row + 🔵Checkbox)
+   ======================================================================== */
+.select-row{
+  display:flex;align-items:center;gap:var(--x3);
+  width:100%;
+  padding:var(--x3) var(--x5);
+  border:0;background:transparent;cursor:pointer;
+  font-family:inherit;text-align:left;
+}
+.select-row:active{background:rgba(2,32,71,.04)}
+.select-row__title{font-size:17px;line-height:25.5px;font-weight:500;color:var(--fg-strong)}
+.checkbox{flex:0 0 auto;width:var(--x6);height:var(--x6);display:block;color:var(--fg-muted)}
+[aria-checked="true"] > .checkbox{color:var(--bg-brand-strong)}
+.checkbox .checkbox__ring{display:block}
+.checkbox .checkbox__fill{display:none}
+[aria-checked="true"] .checkbox__ring{display:none}
+[aria-checked="true"] .checkbox__fill{display:block}
+
+/* 잔량 패널 안의 "기타 점검 의견 남기기" 행 */
+.select-row--opinion{padding:var(--x5);background:var(--bg-surface-basement)}
+.select-row--opinion:active{background:#e9edf1}
+
+/* ========================================================================
+   8. 잔량 입력 패널  (3안 · Figma 5378-13391)
+      제목/안내 문구 없이 게이지 카드만 들어간다.
+   ======================================================================== */
+.detail{display:flex;flex-direction:column}
+
+.gauge-section{
+  display:flex;flex-direction:column;
+  padding:var(--x5) var(--x5) 0;
+  background:var(--bg-neutral-weak);
+}
+
+.gauge-card{
+  position:relative;                      /* 말풍선의 기준 박스 */
+  display:flex;flex-direction:column;gap:var(--x2);
+  padding:52px var(--x5) var(--x5);       /* 위쪽 32px 추가 = 말풍선 자리 */
+  border-radius:var(--x4);
+  background:var(--bg-surface-default);
+}
+.gauge{display:flex;flex-direction:column;gap:var(--x1)}
+
+/* --- slider ------------------------------------------------------------
+   Figma 의 슬라이더 행은 32px(트랙 12px + 위아래 10px) 입니다.
+   터치 타깃 최소 44px 를 맞추려고 44px 로 키웠고, 그만큼 패널 전체 높이가
+   164px → 176px 이 됩니다. Figma 와 픽셀까지 맞춰야 하면 32px 로 내리세요. */
+.slider{position:relative;height:44px;display:flex;align-items:center}
+.slider__track{
+  position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+  height:12px;border-radius:var(--radius-circle);background:var(--bg-neutral-muted);
+}
+.slider__fill{
+  position:absolute;left:0;top:0;bottom:0;
+  border-radius:var(--radius-circle);background:var(--fg-normal);
+}
+.slider__knob{
+  position:absolute;top:50%;width:var(--x6);height:var(--x6);
+  transform:translate(-50%,-50%);
+  border-radius:var(--radius-circle);background:#fff;
+  box-shadow:var(--shadow-light-normal);
+  pointer-events:none;
+}
+/* 실제 조작은 range input 이 담당 (접근성·키보드 지원) */
+.slider__input{
+  position:absolute;left:0;top:0;width:100%;height:44px;margin:0;
+  opacity:0;cursor:pointer;background:transparent;
+  -webkit-appearance:none;appearance:none;
+}
+.slider__input:focus-visible ~ .slider__knob{outline:2px solid var(--bg-brand-strong);outline-offset:2px}
+
+/* 핸들을 따라오는 말풍선 (left 값은 JS 가 px 로 지정) */
+.gauge-bubble{
+  position:absolute;top:var(--x4);
+  display:flex;flex-direction:column;align-items:center;
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+.gauge-bubble__pill{
+  padding:var(--x1) var(--x2);
+  border-radius:var(--x1-5);
+  background:var(--bg-informative-strong);
+  color:var(--fg-inverse);
+  font-size:14px;line-height:21.5px;font-weight:700;
+  white-space:nowrap;font-variant-numeric:tabular-nums;
+}
+.gauge-bubble__tail{display:block;width:20px;height:6.93px}
+
+/* --- 눈금 · 퍼센트 ------------------------------------------------------ */
+.gauge-ticks{display:flex;align-items:flex-end;justify-content:space-between;height:12px}
+.gauge-ticks i{display:block;width:2px;height:6px;border-radius:var(--radius-circle);background:var(--fg-muted)}
+.gauge-ticks i.is-major{height:12px}
+.gauge-percent{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:13px;line-height:20px;font-weight:600;color:var(--fg-strong);
+  font-variant-numeric:tabular-nums;
+}
+.gauge-percent span{width:40px}
+.gauge-percent span:nth-child(2){text-align:center}
+.gauge-percent span:nth-child(3){text-align:right}
+
+/* ========================================================================
+   9. 점검 의견 영역
+   ======================================================================== */
+.note{
+  display:flex;flex-direction:column;gap:var(--x5);
+  padding:var(--x5);
+  background:var(--bg-neutral-weak);
+}
+.note__label{margin:0 0 var(--x2);font-size:14px;line-height:21.5px;font-weight:500;color:var(--fg-normal)}
+.note__stack{display:flex;flex-direction:column;gap:var(--x3)}
+
+.segmented{display:flex;gap:var(--x1-5)}
+.segmented button{
+  flex:1 1 0;min-width:72px;height:48px;
+  border:1px solid var(--stroke-neutral-strong);
+  border-radius:var(--x3);
+  background:var(--bg-surface-default);
+  color:var(--fg-normal);cursor:pointer;
+  font-family:inherit;font-size:17px;line-height:25.5px;font-weight:600;
+}
+.segmented button[aria-pressed="true"]{
+  background:var(--bg-neutral-strong);
+  border-color:var(--bg-neutral-strong);
+  color:var(--fg-inverse);
+}
+
+.textarea{
+  width:100%;height:101px;resize:none;
+  padding:var(--x3) var(--x4);
+  border:1px solid var(--stroke-neutral-strong);
+  border-radius:var(--x3);
+  background:var(--bg-surface-default);
+  color:var(--fg-strong);
+  font-family:inherit;font-size:17px;line-height:25.5px;font-weight:500;
+}
+.textarea::placeholder{color:var(--fg-assistive);font-weight:500}
+.textarea:focus-visible{border-color:transparent;outline:2px solid var(--bg-brand-strong);outline-offset:1px}
+
+.chip-button{
+  align-self:flex-start;
+  height:40px;min-width:64px;padding:0 var(--x4);
+  border:0;border-radius:var(--x2-5);
+  background:var(--bg-neutral-weak);
+  color:var(--fg-normal);cursor:pointer;
+  font-family:inherit;font-size:15px;line-height:22.5px;font-weight:600;
+}
+.chip-button:active{background:rgba(2,32,71,.1)}
+
+/* ========================================================================
+   10. Bottom CTA  (🔵Bottom CTA - Vertical)
+   ======================================================================== */
+.cta{position:absolute;left:0;right:0;bottom:0;pointer-events:none}
+.cta__fade{height:var(--x6);background:linear-gradient(to top,var(--bg-surface-default),rgba(255,255,255,0))}
+.cta__area{
+  padding:var(--x5);
+  padding-bottom:calc(var(--x5) + env(safe-area-inset-bottom));
+  background:var(--bg-surface-default);
+  pointer-events:auto;
+}
+.cta__button{
+  width:100%;height:56px;
+  border:0;border-radius:var(--x3);
+  background:var(--bg-neutral-disabled);
+  color:var(--fg-inverse);
+  font-family:inherit;font-size:17px;line-height:25.5px;font-weight:600;
+  cursor:not-allowed;
+  transition:background .18s ease;
+}
+.cta__button:not(:disabled){background:var(--bg-brand-strong);cursor:pointer}
+</style>
+</head>
+
+<body>
+
+<!-- SVG sprite ------------------------------------------------------------ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="ic-arrow-left" viewBox="0 0 24 24">
+    <path d="M11.4697 4.46967C11.7626 4.17678 12.2374 4.17678 12.5303 4.46967C12.8232 4.76256 12.8232 5.23744 12.5303 5.53033L6.81066 11.25H19C19.4142 11.25 19.75 11.5858 19.75 12C19.75 12.4142 19.4142 12.75 19 12.75H6.81066L12.5303 18.4697C12.8232 18.7626 12.8232 19.2374 12.5303 19.5303C12.2374 19.8232 11.7626 19.8232 11.4697 19.5303L4.46967 12.5303C4.17678 12.2374 4.17678 11.7626 4.46967 11.4697L11.4697 4.46967Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ic-check-circle" viewBox="0 0 24 24">
+    <path d="M16.7908 9.75055C17.0697 9.46447 17.0697 9.00064 16.7908 8.71456C16.5118 8.42848 16.0596 8.42848 15.7806 8.71456L10.8889 13.7315L8.21936 10.9937C7.94042 10.7076 7.48816 10.7076 7.20921 10.9937C6.93026 11.2797 6.93026 11.7436 7.20921 12.0296L10.3838 15.2854C10.5178 15.4228 10.6994 15.5 10.8889 15.5C11.0783 15.5 11.26 15.4228 11.394 15.2854L16.7908 9.75055Z" fill="currentColor"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12ZM20.5 12C20.5 16.6944 16.6944 20.5 12 20.5C7.30558 20.5 3.5 16.6944 3.5 12C3.5 7.30558 7.30558 3.5 12 3.5C16.6944 3.5 20.5 7.30558 20.5 12Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ic-check-circle-fill" viewBox="0 0 24 24">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22ZM16.7908 9.75055C17.0697 9.46447 17.0697 9.00064 16.7908 8.71456C16.5118 8.42848 16.0596 8.42848 15.7806 8.71456L10.8889 13.7315L8.21936 10.9937C7.94042 10.7076 7.48816 10.7076 7.20921 10.9937C6.93026 11.2797 6.93026 11.7436 7.20921 12.0296L10.3838 15.2854C10.5178 15.4228 10.6994 15.5 10.8889 15.5C11.0783 15.5 11.26 15.4228 11.394 15.2854L16.7908 9.75055Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ic-bubble-tail" viewBox="0 0 20 6.9282">
+    <path d="M10.866 5.4282C10.4811 6.09487 9.51888 6.09487 9.13397 5.4282L6 0L14 6.99382e-07L10.866 5.4282Z" fill="#057BFF"/>
+  </symbol>
+</svg>
+
+<div class="screen" id="screen">
+
+  <!-- 1. Top navigation -->
+  <header class="topnav">
+    <button class="icon-button" type="button" aria-label="뒤로가기" data-action="back">
+      <svg width="24" height="24" aria-hidden="true" style="color:var(--fg-strong)"><use href="#ic-arrow-left"/></svg>
+    </button>
+    <button class="text-button" type="button" data-action="save-draft">임시저장</button>
+  </header>
+
+  <!-- 2. Tab -->
+  <nav class="tabs" role="tablist" aria-label="정비리포트 단계" id="tabs">
+    <button class="tab" type="button" role="tab" aria-selected="false">
+      <span class="tab__label">주행거리<span class="tab__dot"></span></span>
+      <span class="tab__indicator"></span>
+    </button>
+    <button class="tab" type="button" role="tab" aria-selected="false">
+      <span class="tab__label">엔진오일<span class="tab__dot"></span></span>
+      <span class="tab__indicator"></span>
+    </button>
+    <button class="tab" type="button" role="tab" aria-selected="false">
+      <span class="tab__label">브레이크패드<span class="tab__dot"></span></span>
+      <span class="tab__indicator"></span>
+    </button>
+    <button class="tab" type="button" role="tab" aria-selected="true">
+      <span class="tab__label">서비스·점검</span>
+      <span class="tab__indicator"></span>
+    </button>
+  </nav>
+
+  <!-- 3. Body -->
+  <main class="body" id="body">
+    <div class="body__inner">
+
+      <!-- 3-1. 무료 서비스 : 체크만 하는 항목 -->
+      <section class="section section--gap-bottom">
+        <div class="list-header">
+          <h2 class="list-header__title">무료 서비스</h2>
+          <p class="list-header__desc">실제 제공한 서비스만 체크해주세요</p>
+        </div>
+        <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="service">
+          <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+          <span class="select-row__title">엔진룸 청소</span>
+        </button>
+        <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="service">
+          <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+          <span class="select-row__title">타이어 공기압 보충</span>
+        </button>
+        <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="service">
+          <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+          <span class="select-row__title">워셔액 보충</span>
+        </button>
+      </section>
+
+      <div class="divider-thick"></div>
+
+      <!-- 3-2. 무료 소모품 점검 : 체크 시 잔량 패널이 펼쳐지는 항목 -->
+      <section class="section">
+        <div class="list-header">
+          <h2 class="list-header__title">무료 소모품 점검</h2>
+          <p class="list-header__desc">정비 중 무료로 점검한 항목에 체크해주세요</p>
+        </div>
+
+        <div class="section">
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">타이어</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">브레이크 패드 (앞)</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">브레이크 패드 (뒤)</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">브레이크 오일</span>
+          </button>
+        </div>
+
+        <div class="section">
+          <div class="list-header">
+            <h3 class="list-header__title list-header__title--sm">엔진룸 점검</h3>
+          </div>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">배터리</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">부동액</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">외부벨트</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">미션 오일</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">연료필터</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">점화플러그</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">파워스티어링 오일</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">타이밍벨트</span>
+          </button>
+        </div>
+
+        <div class="section">
+          <div class="list-header">
+            <h3 class="list-header__title list-header__title--sm">기타 소모품 점검</h3>
+          </div>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">에어컨필터</span>
+          </button>
+        </div>
+
+        <div class="section">
+          <div class="list-header">
+            <h3 class="list-header__title list-header__title--sm">하부 점검</h3>
+          </div>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">등속 조인트</span>
+          </button>
+          <button class="select-row" type="button" role="checkbox" aria-checked="false" data-row="inspect">
+            <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+            <span class="select-row__title">쇼바</span>
+          </button>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- 4. Bottom CTA -->
+  <div class="cta">
+    <div class="cta__fade"></div>
+    <div class="cta__area">
+      <button class="cta__button" type="button" id="submit" disabled>작업 완료</button>
+    </div>
+  </div>
+</div>
+
+<!--
+  잔량 입력 패널 템플릿.
+  data-row="inspect" 행이 체크되면 그 행 바로 뒤에 이 마크업이 복제되어 들어갑니다.
+  서버 렌더링으로 옮길 때는 이 블록을 그대로 각 항목 뒤에 출력하고
+  hidden 속성만 체크 여부로 제어하면 됩니다.
+-->
+<template id="tpl-detail">
+  <div class="detail">
+
+    <!-- 잔량 게이지 (3안 · 제목 없음) -->
+    <div class="gauge-section">
+      <div class="gauge-card">
+        <div class="gauge-bubble" data-el="bubble">
+          <span class="gauge-bubble__pill" data-el="pill">잔량 50%</span>
+          <svg class="gauge-bubble__tail" aria-hidden="true"><use href="#ic-bubble-tail"/></svg>
+        </div>
+
+        <div class="gauge">
+          <div class="slider" data-el="slider">
+            <div class="slider__track" data-el="track"><div class="slider__fill" data-el="fill"></div></div>
+            <input class="slider__input" data-el="input" type="range" min="0" max="100" step="10" value="50" aria-label="잔량">
+            <div class="slider__knob" data-el="knob"></div>
+          </div>
+
+          <div class="gauge-ticks" aria-hidden="true">
+            <i class="is-major"></i><i></i><i></i><i></i><i></i>
+            <i class="is-major"></i><i></i><i></i><i></i><i></i>
+            <i class="is-major"></i>
+          </div>
+
+          <div class="gauge-percent" aria-hidden="true">
+            <span>0%</span><span>50%</span><span>100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 기타 점검 의견 남기기 -->
+    <button class="select-row select-row--opinion" type="button" role="checkbox" aria-checked="false" data-row="opinion">
+      <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+      <span class="select-row__title">기타 점검 의견 남기기</span>
+    </button>
+
+    <!-- 상태 · 점검 의견 -->
+    <div class="note" data-el="note" hidden>
+      <div>
+        <p class="note__label" data-el="status-label">상태</p>
+        <div class="segmented" role="group" aria-label="상태">
+          <button type="button" data-status="주의" aria-pressed="false">주의</button>
+          <button type="button" data-status="교체필요" aria-pressed="false">교체필요</button>
+        </div>
+      </div>
+
+      <div class="note__stack">
+        <div>
+          <label class="note__label" data-el="note-label">점검 의견</label>
+          <textarea class="textarea" data-el="comment" placeholder="점검 의견을 입력해주세요"></textarea>
+        </div>
+        <button class="chip-button" type="button" data-action="suggest">추천 문구 선택</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+(function(){
+  "use strict";
+
+  var submitEl = document.getElementById("submit");
+  var tpl      = document.getElementById("tpl-detail");
+  var uid = 0;
+
+  /* --- 잔량 게이지 렌더 ------------------------------------------------ */
+  function paint(detail){
+    var pct    = Number(detail.querySelector('[data-el="input"]').value);
+    var slider = detail.querySelector('[data-el="slider"]');
+    var track  = detail.querySelector('[data-el="track"]');
+    var bubble = detail.querySelector('[data-el="bubble"]');
+    var card   = bubble.parentNode;
+
+    detail.querySelector('[data-el="fill"]').style.width = pct + "%";
+    detail.querySelector('[data-el="knob"]').style.left  = pct + "%";
+    detail.querySelector('[data-el="pill"]').textContent = "잔량 " + pct + "%";
+
+    // 말풍선은 핸들 중심을 따라가되 카드 안쪽 10px 여백을 지킨다
+    if (!track.offsetWidth) return;
+    var x    = slider.offsetLeft + track.offsetLeft + track.offsetWidth * pct / 100;
+    var half = bubble.offsetWidth / 2;
+    bubble.style.left = Math.round(
+      Math.min(Math.max(x, 10 + half), card.clientWidth - 10 - half)
+    ) + "px";
+  }
+
+  function repaintAll(){
+    Array.prototype.forEach.call(document.querySelectorAll(".detail"), paint);
+  }
+
+  /* --- 작업 완료 버튼 활성화 -------------------------------------------
+     참고: Figma 원본은 프레임 전체가 비활성 상태만 있어 활성 색상이
+     정의돼 있지 않습니다. 브랜드 컬러(--bg-brand-strong)로 처리했습니다.  */
+  function refreshSubmit(){
+    var n = document.querySelectorAll(
+      '[data-row="service"][aria-checked="true"], [data-row="inspect"][aria-checked="true"]'
+    ).length;
+    submitEl.disabled = n === 0;
+  }
+
+  /* --- 행 토글 --------------------------------------------------------- */
+  function toggleInspect(row, on){
+    row.setAttribute("aria-checked", on ? "true" : "false");
+
+    if (on){
+      var detail = tpl.content.firstElementChild.cloneNode(true);
+      uid++;
+      // label ↔ control 연결 (id는 복제 시점에 부여)
+      var ta = detail.querySelector('[data-el="comment"]');
+      ta.id = "comment-" + uid;
+      detail.querySelector('[data-el="note-label"]').setAttribute("for", ta.id);
+      detail.querySelector('[data-el="status-label"]').id = "status-label-" + uid;
+      detail.querySelector(".segmented").setAttribute("aria-labelledby", "status-label-" + uid);
+      detail.querySelector('[data-el="input"]').setAttribute(
+        "aria-label", row.querySelector(".select-row__title").textContent + " 잔량"
+      );
+      detail.dataset.item = row.querySelector(".select-row__title").textContent;
+
+      row.insertAdjacentElement("afterend", detail);
+      paint(detail);
+    } else {
+      var next = row.nextElementSibling;
+      if (next && next.classList.contains("detail")) next.remove();
+    }
+    refreshSubmit();
+  }
+
+  /* --- 이벤트 --------------------------------------------------------- */
+  document.addEventListener("click", function(e){
+    var suggest = e.target.closest('[data-action="suggest"]');
+    if (suggest){
+      var detail = suggest.closest(".detail");
+      var ta = detail.querySelector('[data-el="comment"]');
+      ta.value = detail.dataset.item + " 교체가 필요합니다.";
+      ta.focus();
+      return;
+    }
+
+    var seg = e.target.closest(".segmented button");
+    if (seg){
+      var on = seg.getAttribute("aria-pressed") !== "true";
+      Array.prototype.forEach.call(seg.parentNode.children, function(b){
+        b.setAttribute("aria-pressed", "false");
+      });
+      seg.setAttribute("aria-pressed", on ? "true" : "false");
+      return;
+    }
+
+    var row = e.target.closest("[data-row]");
+    if (!row) return;
+    var checked = row.getAttribute("aria-checked") !== "true";
+
+    if (row.dataset.row === "inspect"){
+      toggleInspect(row, checked);
+    } else if (row.dataset.row === "opinion"){
+      row.setAttribute("aria-checked", checked ? "true" : "false");
+      row.closest(".detail").querySelector('[data-el="note"]').hidden = !checked;
+    } else {
+      row.setAttribute("aria-checked", checked ? "true" : "false");
+      refreshSubmit();
+    }
+  });
+
+  document.addEventListener("input", function(e){
+    if (e.target.matches('[data-el="input"]')) paint(e.target.closest(".detail"));
+  });
+
+  // 말풍선 위치는 픽셀 계산이라 폭이 바뀌면 다시 그린다
+  window.addEventListener("resize", repaintAll);
+
+  // 탭 목록은 우측 정렬 + 가로 스크롤. 선택된 탭이 보이도록 끝으로 스크롤.
+  var tabs = document.getElementById("tabs");
+  tabs.scrollLeft = tabs.scrollWidth;
+})();
+</script>
+</body>
+</html>
