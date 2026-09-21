@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Custom Gauge · 잔량 입력</title>
+<meta name="theme-color" content="#f2f4f6">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Custom Gauge · 잔량 입력">
+<meta property="og:description" content="구간 색이 채움과 툴팁에 함께 들어가는 잔량 입력 슬라이더입니다.">
+<meta name="twitter:card" content="summary_large_image">
+
+<!--
+  Custom Gauge — 브레이크 패드 잔량 입력
+  출처: Figma DKL8HAwmksVm0MiH491gox
+        COMPONENT_SET 5554:40000 "Custom Gauge"
+          variant 12개 = %(10~100 / disable) x line(on / off)
+        화면 5705:34220 "무료 소모품 점검" 안의 col_점검불가 섹션
+
+  2026-09-21 Figma 업데이트 반영
+    · 툴팁 텍스트 13/20 → 14/21.5  → 말풍선 28 → 30, 툴팁 자리 34 → 36
+    · 트랙 높이 12 → 14            → 슬라이더 줄 32 → 34
+    · 카드 150 → 154
+    · 눈금 색 #CFD5D9 → #04283E 11% (트랙 배경과 같은 색). 굵기·길이는 그대로
+      Figma 에서는 사각형이 아니라 stroke 2 / round cap 인 선(10, 4)으로 바뀌었는데
+      둥근 끝을 더하면 12 / 6 이라 보이는 크기는 같습니다.
+    · 20% 가 주의 → 위험 으로 넘어감. 구간 경계 20/50 → 30/50
+    · 점검 불가(disable) 가 Figma 에 생김. 더 이상 임의 처리가 아닙니다.
+    · 제목 "잔량을 입력해주세요" 는 별표(*) 없이 17 SemiBold
+    · 옆 라벨 "점검 불가" → "점검 불가 차종", 17 Medium
+    · 카드 테두리 variant(line=on) 추가 — 1px #04283E 11%
+
+  Figma 원본 수치
+    섹션      360 폭 / padding 20 / gap 12 / bg #022047 5% / radius 0
+    제목 줄   320x34 / gap 8
+              Field Label  17 SemiBold 25.5 #1A2128
+              점검 불가 차종 17 Medium   #1A2128
+    카드      320x154 / radius 16 / padding 20 / #FFF
+    툴팁 자리 320x36  — 카드 padding 을 뚫고 카드 폭 전체를 씁니다
+    말풍선    h30 / padding 4 8 / radius 6 / 14 SemiBold 21.5 #FFF
+    꼬리      24x6 박스 안 12x6 삼각형, 꼭지 1px 라운드
+    트랙      280x14 / radius 999 / #04283E 11%
+    채움      구간 색, 핸들 중심까지
+    핸들      24 원 #FFF + shadow 0 2 12 rgba(0,0,0,.08), 0 2 4 rgba(0,0,0,.06)
+    눈금      11개 / 2px / 0·50·100 은 12, 나머지 6 / #04283E 11%
+    퍼센트    13 SemiBold 20 #505C66
+
+  구간
+    위험 #F84848  잔량 30% 미만        (10 / 20% variant)
+    주의 #FBAA16  잔량 30% 이상 50% 미만 (30 / 40% variant)
+    양호 #00AFFF  잔량 50% 이상        (50 ~ 100% variant)
+    점검 불가 #CFD5D9 — 말풍선 · 꼬리 · 채움 · 퍼센트 라벨.
+              트랙 배경 · 눈금 · 흰 핸들은 그대로
+
+  Figma 수치와 다르게 간 곳 (개발가이드 참고)
+    · 말풍선이 멈추는 선을 카드 안쪽 8 로 뒀습니다. 100% variant 실측은 6 입니다.
+      6 으로 두면 꼬리가 핸들에서 2px 벗어납니다(꼬리 302 vs 핸들 300).
+      "꼬리는 항상 핸들 중앙" 을 지키려면 카드 padding 20 = 8 + 12 이어야 합니다.
+    · 20% variant 만 툴팁 텍스트가 13 입니다. 나머지 11장이 14 라 14 로 통일했습니다.
+    · "잔량100%" 공백 누락도 그대로라 `잔량 {N}%` 로 통일했습니다.
+
+  화면 구성
+    1. 화면 맥락 — 섹션째로 올려놓고 실제로 만져보는 슬라이더
+    2. 상태 — 위험 / 주의 / 양호 / 점검 불가 / 카드 테두리
+    3. 값별 — 0% ~ 100% (양 끝에서 툴팁이 어떻게 멈추는지 확인용)
+-->
+
+<style>
+/* ========================================================================
+   1. 토큰  (Figma 변수 이름 그대로)
+   ======================================================================== */
+:root{
+  --fg-strong:#1a2128;            /* Foreground/Neutral/Strong */
+  --fg-normal:#505c66;            /* Foreground/Neutral/Normal */
+  --fg-assistive:#8b959e;
+  --fg-muted:#cfd5d9;             /* Foreground/Neutral/Muted */
+  --fg-inverse:#ffffff;           /* Foreground/Neutral/Inverse */
+  --bg-surface-default:#ffffff;   /* Background/Surface/Default */
+  --bg-surface-basement:#f2f4f6;
+  --bg-neutral-weak:rgba(2,32,71,.05);   /* 섹션 배경 #022047 5% */
+  --bg-neutral-muted:rgba(4,40,62,.11);  /* Background/Neutral/Muted · 트랙 · 눈금 · 테두리 */
+  --bg-brand-strong:#00afff;      /* Background/Brand/Strong   · 양호 */
+  --bg-caution-strong:#fbaa16;    /* Background/Caution/Strong · 주의 */
+  --bg-danger-strong:#f84848;     /* Background/Danger/Strong  · 위험 */
+
+  --x0-5:2px; --x1:4px;  --x1-5:6px; --x2:8px;  --x2-5:10px; --x3:12px;
+  --x3-5:14px; --x4:16px; --x5:20px; --x6:24px; --x8:32px; --x10:40px; --x11:44px;
+  --radius-circle:999px;
+
+  --shadow-light-normal:0 2px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
+
+  --font:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,
+         "Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+}
+
+/* ========================================================================
+   2. Base
+   ======================================================================== */
+*{box-sizing:border-box}
+body{
+  margin:0;
+  padding:var(--x5) var(--x5) var(--x8);
+  font-family:var(--font);
+  background:var(--bg-surface-basement);
+  color:var(--fg-strong);
+  -webkit-text-size-adjust:100%;
+  -webkit-tap-highlight-color:transparent;
+}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--bg-brand-strong);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.wrap{max-width:400px;margin:0 auto;display:flex;flex-direction:column;gap:var(--x8)}
+
+.block{display:flex;flex-direction:column;gap:var(--x3)}
+.block__head{display:flex;flex-direction:column;gap:var(--x1)}
+.block__title{margin:0;font-size:17px;line-height:25.5px;font-weight:600;color:var(--fg-strong)}
+.block__desc{margin:0;font-size:14px;line-height:21.5px;font-weight:400;color:var(--fg-normal)}
+.caption{margin:0;font-size:13px;line-height:20px;font-weight:600;color:var(--fg-assistive)}
+
+/* ========================================================================
+   3. 잔량 게이지 카드  (Figma: Gauge 320x154)
+      20 padding + 36 툴팁 + 4 + 34 슬라이더 + 4 + 12 눈금 + 4 + 20 퍼센트 + 20 = 154
+   ======================================================================== */
+.gauge-card{
+  padding:var(--x5);
+  border-radius:var(--x4);
+  background:var(--bg-surface-default);
+}
+/* variant line=on — 카드에 1px 테두리 */
+.gauge-card.is-lined{box-shadow:inset 0 0 0 1px var(--bg-neutral-muted)}
+
+.gauge{display:flex;flex-direction:column;align-items:center;gap:var(--x1)}
+
+/* --- 툴팁 자리 ---------------------------------------------------------
+   카드 padding 을 좌우로 뚫고 카드 폭 전체(320)를 씁니다. 툴팁이 트랙 끝보다
+   바깥으로 나갈 수 있어야 해서 Figma 도 이렇게 잡혀 있습니다.            */
+.gauge__tiparea{
+  position:relative;height:36px;
+  width:calc(100% + var(--x10));margin:0 calc(var(--x5) * -1);
+}
+.tip{
+  position:absolute;left:0;bottom:0;
+  transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;
+  pointer-events:none;
+}
+.tip b{
+  display:block;height:30px;
+  padding:var(--x1) var(--x2);
+  border-radius:var(--x1-5);
+  background:var(--band);
+  color:var(--fg-inverse);
+  font-size:14px;line-height:21.5px;font-weight:600;white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+  transition:background .18s ease;
+}
+/* 꼬리는 24 폭 박스 가운데 12x6. 박스째로 좌우로 밀어 씁니다. */
+.tip i{display:block;width:24px;height:6px;color:var(--band);transition:color .18s ease}
+.tip i svg{display:block;width:24px;height:6px}
+
+/* 구간 색 */
+[data-band="good"]   {--band:var(--bg-brand-strong)}
+[data-band="caution"]{--band:var(--bg-caution-strong)}
+[data-band="danger"] {--band:var(--bg-danger-strong)}
+
+/* --- 슬라이더 ----------------------------------------------------------
+   Figma Slider Group = 상하 여백 10 + 트랙 14 = 34                        */
+.gauge__body{display:flex;flex-direction:column;gap:var(--x1);width:100%}
+
+.slider{position:relative;height:34px;display:flex;align-items:center}
+.slider__track{
+  position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+  height:var(--x3-5);border-radius:var(--radius-circle);background:var(--bg-neutral-muted);
+  overflow:hidden;
+}
+.slider__fill{
+  position:absolute;left:0;top:0;bottom:0;
+  border-radius:var(--radius-circle);
+  background:var(--band);
+  transition:background .18s ease;
+}
+.slider__knob{
+  position:absolute;top:50%;width:var(--x6);height:var(--x6);
+  transform:translate(-50%,-50%);
+  border-radius:var(--radius-circle);background:#fff;
+  box-shadow:var(--shadow-light-normal);
+  pointer-events:none;
+}
+/* 조작은 range input 이 담당합니다. 터치 영역 44px.                       */
+.slider__input{
+  position:absolute;left:0;top:0;width:100%;height:var(--x11);
+  margin:calc(var(--x11) / -2 + 17px) 0;
+  opacity:0;cursor:pointer;background:transparent;
+  -webkit-appearance:none;appearance:none;
+}
+.slider__input:focus-visible ~ .slider__knob{outline:2px solid var(--bg-brand-strong);outline-offset:2px}
+/* 네이티브 thumb 을 1px 로 만들어야 input 내부 좌표와 우리가 그린 핸들이 맞습니다. */
+.slider__input::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:1px;height:var(--x11);background:transparent;border:0}
+.slider__input::-moz-range-thumb{width:1px;height:var(--x11);background:transparent;border:0}
+
+/* --- 눈금 · 퍼센트 -----------------------------------------------------
+   Figma 는 stroke 2 / round cap 인 선(높이 10, 4). 둥근 끝을 더하면 12, 6 이라
+   여기서는 radius 999 인 2px 막대로 같은 모양을 냅니다.                   */
+.gauge__ticks{display:flex;align-items:flex-end;justify-content:space-between;height:12px}
+.gauge__ticks i{display:block;width:var(--x0-5);height:var(--x1-5);border-radius:var(--radius-circle);background:var(--bg-neutral-muted)}
+.gauge__ticks i.is-major{height:12px}
+
+.gauge__percent{
+  display:flex;align-items:center;justify-content:space-between;height:20px;
+  font-size:13px;line-height:20px;font-weight:600;color:var(--fg-normal);
+  font-variant-numeric:tabular-nums;
+}
+.gauge__percent span{width:var(--x10)}
+.gauge__percent span:nth-child(2){text-align:center}
+.gauge__percent span:nth-child(3){text-align:right}
+
+/* --- 점검 불가 (Figma variant %=disable) -------------------------------
+   말풍선 · 꼬리 · 채움 · 퍼센트 라벨만 Foreground/Neutral/Muted 로.
+   트랙 배경 · 눈금 · 흰 핸들은 그대로 둡니다.                            */
+[data-na="true"] .slider__input{pointer-events:none}
+[data-na="true"] .slider__fill{background:var(--fg-muted)}
+[data-na="true"] .tip b{background:var(--fg-muted)}
+[data-na="true"] .tip i{color:var(--fg-muted)}
+[data-na="true"] .gauge__percent{color:var(--fg-muted)}
+
+/* ========================================================================
+   4. 1번 블록 — 화면 맥락
+      Figma 화면 5705:34220 의 col_점검불가 섹션을 그대로 옮긴 것
+      360 폭 / padding 20 / gap 12 / bg #022047 5%
+   ======================================================================== */
+/* 화면에서는 이 섹션 바깥이 흰 배경입니다. 섹션 틴트(#022047 5%)가 제대로
+   읽히도록 이 블록만 흰 바탕을 깔아줍니다. */
+.block--screen{
+  background:var(--bg-surface-default);
+  margin:0 calc(var(--x5) * -1);
+  padding:var(--x5);
+}
+.section{
+  display:flex;flex-direction:column;gap:var(--x3);
+  padding:var(--x5);
+  margin:0 calc(var(--x5) * -1);      /* 화면 폭(360)까지 꽉 채움 */
+  background:var(--bg-neutral-weak);
+}
+.section__head{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--x2);
+  min-height:34px;
+}
+.section__title{margin:0;font-size:17px;line-height:25.5px;font-weight:600;color:var(--fg-strong)}
+
+.na-toggle{
+  flex:0 0 auto;
+  display:flex;align-items:center;gap:var(--x2-5);
+  padding:var(--x1) 0;
+  border:0;background:transparent;cursor:pointer;font-family:inherit;
+  font-size:17px;line-height:25.5px;font-weight:500;color:var(--fg-strong);
+}
+.checkbox{flex:0 0 auto;width:var(--x6);height:var(--x6);display:block;color:var(--fg-muted)}
+[aria-checked="true"] > .checkbox{color:var(--bg-brand-strong)}
+.checkbox .checkbox__fill{display:none}
+[aria-checked="true"] .checkbox__ring{display:none}
+[aria-checked="true"] .checkbox__fill{display:block}
+
+.readout{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--x3);
+  padding:var(--x3) var(--x4);
+  border-radius:var(--x3);
+  background:var(--bg-surface-default);
+  font-size:14px;line-height:21.5px;font-weight:500;color:var(--fg-normal);
+}
+.readout b{font-weight:600;color:var(--fg-strong);font-variant-numeric:tabular-nums}
+.readout__reset{
+  height:var(--x8);padding:0 var(--x3);
+  border:0;border-radius:var(--x2);
+  background:var(--bg-neutral-muted);color:var(--fg-normal);cursor:pointer;
+  font-family:inherit;font-size:13px;line-height:20px;font-weight:600;
+}
+
+/* ========================================================================
+   5. 카드 그리드
+   ======================================================================== */
+.variants{display:grid;grid-template-columns:1fr;gap:var(--x3)}
+@media (min-width:640px){
+  .wrap{max-width:820px}
+  .variants{grid-template-columns:1fr 1fr}
+}
+.variant{display:flex;flex-direction:column;gap:var(--x2)}
+</style>
+</head>
+
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="ic-check-circle" viewBox="0 0 24 24">
+    <path d="M16.7908 9.75055C17.0697 9.46447 17.0697 9.00064 16.7908 8.71456C16.5118 8.42848 16.0596 8.42848 15.7806 8.71456L10.8889 13.7315L8.21936 10.9937C7.94042 10.7076 7.48816 10.7076 7.20921 10.9937C6.93026 11.2797 6.93026 11.7436 7.20921 12.0296L10.3838 15.2854C10.5178 15.4228 10.6994 15.5 10.8889 15.5C11.0783 15.5 11.26 15.4228 11.394 15.2854L16.7908 9.75055Z" fill="currentColor"/>
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12ZM20.5 12C20.5 16.6944 16.6944 20.5 12 20.5C7.30558 20.5 3.5 16.6944 3.5 12C3.5 7.30558 7.30558 3.5 12 3.5C16.6944 3.5 20.5 7.30558 20.5 12Z" fill="currentColor"/>
+  </symbol>
+  <symbol id="ic-check-circle-fill" viewBox="0 0 24 24">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22ZM16.7908 9.75055C17.0697 9.46447 17.0697 9.00064 16.7908 8.71456C16.5118 8.42848 16.0596 8.42848 15.7806 8.71456L10.8889 13.7315L8.21936 10.9937C7.94042 10.7076 7.48816 10.7076 7.20921 10.9937C6.93026 11.2797 6.93026 11.7436 7.20921 12.0296L10.3838 15.2854C10.5178 15.4228 10.6994 15.5 10.8889 15.5C11.0783 15.5 11.26 15.4228 11.394 15.2854L16.7908 9.75055Z" fill="currentColor"/>
+  </symbol>
+  <!-- 툴팁 꼬리 : Figma Point Area 24x6, 안쪽 12x6 삼각형, 꼭지 1px 라운드 -->
+  <symbol id="ic-tip-point" viewBox="0 0 24 6">
+    <path d="M12 0H18L13.4142 4.58579C12.6332 5.36683 11.3668 5.36684 10.5858 4.58579L6 0H12Z" fill="currentColor"/>
+  </symbol>
+</svg>
+
+<div class="wrap">
+
+  <!-- ===================================================================
+       1. 화면 맥락
+       =================================================================== -->
+  <section class="block block--screen">
+    <div class="block__head">
+      <h1 class="block__title">화면 맥락</h1>
+      <p class="block__desc">화면 5705:34220 의 <code>col_점검불가</code> 섹션 그대로입니다. 0 ~ 100%, 10% 단위로 스냅됩니다.</p>
+    </div>
+
+    <div class="section" id="play" data-slider data-na="false" data-band="good">
+      <div class="section__head">
+        <h2 class="section__title">잔량을 입력해주세요</h2>
+        <button class="na-toggle" type="button" role="checkbox" aria-checked="false" data-action="na">
+          <svg class="checkbox" aria-hidden="true"><use class="checkbox__ring" href="#ic-check-circle"/><use class="checkbox__fill" href="#ic-check-circle-fill"/></svg>
+          <span>점검 불가 차종</span>
+        </button>
+      </div>
+
+      <div class="gauge-card">
+        <div class="gauge">
+          <div class="gauge__tiparea">
+            <div class="tip" data-el="tip">
+              <b>잔량 50%</b>
+              <i data-el="point"><svg viewBox="0 0 24 6" aria-hidden="true"><use href="#ic-tip-point"/></svg></i>
+            </div>
+          </div>
+          <div class="gauge__body">
+            <div class="slider">
+              <div class="slider__track"><div class="slider__fill" data-el="fill"></div></div>
+              <div class="slider__knob" data-el="knob"></div>
+              <input class="slider__input" type="range" min="0" max="100" step="10" value="50"
+                     data-el="input" aria-label="브레이크 패드 잔량">
+            </div>
+            <div class="gauge__ticks" aria-hidden="true">
+              <i class="is-major"></i><i></i><i></i><i></i><i></i>
+              <i class="is-major"></i><i></i><i></i><i></i><i></i><i class="is-major"></i>
+            </div>
+            <div class="gauge__percent" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="readout">
+        <span>저장되는 값 <b data-el="readout">50% · 양호</b></span>
+        <button class="readout__reset" type="button" data-action="reset">되돌리기</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       2. 상태
+       =================================================================== -->
+  <section class="block">
+    <div class="block__head">
+      <h2 class="block__title">상태</h2>
+      <p class="block__desc">위험 30% 미만 / 주의 30~40% / 양호 50% 이상. 20% 가 주의에서 위험으로 넘어왔습니다.</p>
+    </div>
+    <div class="variants" id="states"></div>
+  </section>
+
+  <!-- ===================================================================
+       3. 값별
+       =================================================================== -->
+  <section class="block">
+    <div class="block__head">
+      <h2 class="block__title">값별</h2>
+      <p class="block__desc">0% ~ 100%. 양 끝 두 장은 말풍선이 카드 안쪽 8px 선에서 멈추고 꼬리만 핸들을 따라가는 모습입니다.</p>
+    </div>
+    <div class="variants" id="values"></div>
+  </section>
+
+</div>
+
+<!-- 스냅샷용 카드 템플릿 (조작 불가) -->
+<template id="tpl-card">
+  <div class="variant">
+    <p class="caption"></p>
+    <div class="gauge-card" data-slider data-na="false" data-band="good">
+      <div class="gauge">
+        <div class="gauge__tiparea">
+          <div class="tip" data-el="tip">
+            <b>잔량 50%</b>
+            <i data-el="point"><svg viewBox="0 0 24 6" aria-hidden="true"><use href="#ic-tip-point"/></svg></i>
+          </div>
+        </div>
+        <div class="gauge__body">
+          <div class="slider">
+            <div class="slider__track"><div class="slider__fill" data-el="fill"></div></div>
+            <div class="slider__knob" data-el="knob"></div>
+          </div>
+          <div class="gauge__ticks" aria-hidden="true">
+            <i class="is-major"></i><i></i><i></i><i></i><i></i>
+            <i class="is-major"></i><i></i><i></i><i></i><i></i><i class="is-major"></i>
+          </div>
+          <div class="gauge__percent" aria-hidden="true"><span>0%</span><span>50%</span><span>100%</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+(function(){
+  "use strict";
+
+  var tpl = document.getElementById("tpl-card");
+
+  /* TIP_INSET  말풍선이 카드 안쪽으로 붙을 수 있는 한계.
+     TAIL_INSET 꼬리 중심이 말풍선 끝에서 남겨야 하는 여백 (꼬리 끝 기준 6).
+     CARD_PAD   카드 padding.
+     카드 padding 20 = 8 + 12 이라서 핸들이 트랙 끝에 가도 꼬리가 핸들을 벗어나지
+     않습니다. 100% variant 실측은 6 인데, 그러면 꼬리가 핸들에서 2px 벗어납니다. */
+  var TIP_INSET  = 8;
+  var TAIL_INSET = 12;
+  var CARD_PAD   = 20;
+
+  /* --- 구간 판정 -------------------------------------------------------
+     2026-09-21 업데이트: 20% 가 주의 → 위험.
+       10·20% 위험 / 30·40% 주의 / 50~100% 양호                            */
+  function bandOf(pct){
+    if (pct >= 50) return "good";
+    if (pct >= 30) return "caution";
+    return "danger";
+  }
+  var BAND_NAME = { good:"양호", caution:"주의", danger:"위험" };
+
+  /* --- 게이지 렌더 ----------------------------------------------------- */
+  function paint(root, pct){
+    root.dataset.pct  = pct;
+    root.dataset.band = bandOf(pct);
+    root.querySelector('[data-el="fill"]').style.width = pct + "%";
+    root.querySelector('[data-el="knob"]').style.left  = pct + "%";
+
+    var tip = root.querySelector('[data-el="tip"]');
+    tip.querySelector("b").textContent = "잔량 " + pct + "%";
+
+    var area  = root.querySelector(".gauge__tiparea");
+    var cardW = area.clientWidth;                      // 카드 폭 (320)
+    var trackW = cardW - CARD_PAD * 2;                 // 트랙 폭 (280)
+    var bubble = tip.querySelector("b");
+    var half   = bubble.offsetWidth / 2;
+
+    // 핸들 중심 — 카드 왼쪽 끝 기준
+    var knob = CARD_PAD + trackW * pct / 100;
+
+    // 말풍선 중심은 핸들을 따라가되 카드 안쪽 8px 선에서 멈춥니다.
+    var min = TIP_INSET + half;
+    var max = cardW - TIP_INSET - half;
+    var center = min > max ? knob : Math.min(Math.max(knob, min), max);
+    tip.style.left = center + "px";
+
+    // 밀린 만큼 꼬리가 핸들 쪽으로 따라갑니다. 말풍선 밖으로는 못 나갑니다.
+    var limit  = Math.max(0, half - TAIL_INSET);
+    var offset = Math.min(Math.max(knob - center, -limit), limit);
+    root.querySelector('[data-el="point"]').style.transform = "translateX(" + offset + "px)";
+  }
+
+  /* --- 스냅샷 카드 ----------------------------------------------------- */
+  function addCard(container, caption, pct, opts){
+    opts = opts || {};
+    var el = tpl.content.firstElementChild.cloneNode(true);
+    el.querySelector(".caption").textContent = caption;
+    var slider = el.querySelector("[data-slider]");
+    slider.dataset.na = opts.na ? "true" : "false";
+    if (opts.lined) slider.classList.add("is-lined");
+    container.appendChild(el);
+    paint(slider, pct);
+  }
+
+  var states = document.getElementById("states");
+  addCard(states, "위험 — 20% (전에는 주의였음)", 20, {});
+  addCard(states, "주의 — 30%", 30, {});
+  addCard(states, "양호 — 50%", 50, {});
+  addCard(states, "점검 불가 — variant %=disable", 50, { na:true });
+  addCard(states, "카드 테두리 — variant line=on", 50, { lined:true });
+
+  var values = document.getElementById("values");
+  for (var v = 0; v <= 100; v += 10){
+    var note = v === 0   ? " — 말풍선 왼쪽 끝 고정 (Figma variant 없음)"
+             : v === 100 ? " — 말풍선 오른쪽 끝 고정" : "";
+    addCard(values, v + "% · " + BAND_NAME[bandOf(v)] + note, v, {});
+  }
+
+  /* --- 조작 ------------------------------------------------------------ */
+  var play     = document.getElementById("play");
+  var input    = play.querySelector('[data-el="input"]');
+  var readout  = play.querySelector('[data-el="readout"]');
+  var naButton = play.querySelector('[data-action="na"]');
+
+  function refresh(){
+    var pct = Number(input.value);
+    paint(play, pct);
+    input.setAttribute("aria-valuetext", "잔량 " + pct + "% " + BAND_NAME[bandOf(pct)]);
+    readout.textContent = play.dataset.na === "true"
+      ? "점검 불가 차종"
+      : pct + "% · " + BAND_NAME[bandOf(pct)];
+  }
+
+  input.addEventListener("input", refresh);
+
+  naButton.addEventListener("click", function(){
+    var on = naButton.getAttribute("aria-checked") !== "true";
+    naButton.setAttribute("aria-checked", on ? "true" : "false");
+    play.dataset.na = on ? "true" : "false";
+    input.disabled = on;
+    refresh();
+  });
+
+  play.querySelector('[data-action="reset"]').addEventListener("click", function(){
+    input.value = 50;
+    input.disabled = false;
+    play.dataset.na = "false";
+    naButton.setAttribute("aria-checked", "false");
+    refresh();
+  });
+
+  /* 폭이 바뀌면 말풍선 멈추는 지점도 바뀌므로 전부 다시 그립니다. */
+  window.addEventListener("resize", function(){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-slider]"), function(el){
+      paint(el, Number(el.dataset.pct));
+    });
+  });
+
+  refresh();
+})();
+</script>
+</body>
+</html>
